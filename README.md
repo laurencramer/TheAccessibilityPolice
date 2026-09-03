@@ -1,2 +1,2 @@
-# LaurenCramer_project
+# Accessibility Checker
 Class project for HCI 5840
