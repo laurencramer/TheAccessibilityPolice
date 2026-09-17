@@ -24,7 +24,9 @@ def parse_html(html):
 
 def check_page_title(soup):
     # Check for a non-empty <title> (WCAG 2.4.2)
+    
     title = soup.find('title')
+
     if title is None or not title.text.strip():
         return {
             "type": "Missing page title",
@@ -37,8 +39,10 @@ def check_page_title(soup):
 def check_images(soup):
     # Find images missing alt text (WCAG 1.1.1)
     # Success Criterion 1.1.1: All non-text content that is presented to the user has a text alternative that serves the equivalent purpose.
+    
     images = soup.find_all('img')
     issues = []
+
     for img in images:
         if not img.has_attr("alt"):
             issues.append({
@@ -71,18 +75,46 @@ def check_forms(soup):
                     "description": "A form input is missing an associated label.",
                     "user_impact": "Users who rely on screen readers might not know what information the form is asking them to enter."
                 })
+
     return issues
 
 def check_headings(soup):
     # Check heading structure (WCAG 1.3.1)
     # Success Criterion 1.3.1: Information, structure, and relationships conveyed through presentation can be programmatically determined or are available in text.
+    headings = soup.find_all(['h1', 'h2', 'h3', 'h4', 'h5', 'h6'])
+    issues = []
+    previous_level = 0
 
-    pass
+    for heading in headings:
+        current_level = int(heading.name[1])
+        if previous_level and current_level > previous_level + 1:
+            issues.append({
+                "type": "Incorrect heading structure",
+                "severity": "Medium",
+                "element": str(heading),
+                "description": "Heading level " + str(current_level) + " follows heading level " + str(previous_level) + ", which may confuse users.",
+                "user_impact": "Users who rely on screen readers might have difficulty understanding the content hierarchy."
+            })
+        previous_level = current_level
+
+    return issues
 
 def check_links(soup):
     # Check for empty or unclear links (WCAG 2.4.4)
     # Success Criterion 2.4.4: The purpose of each link can be determined from the link text alone or from the link text together with its programmatically determined link context, except where the purpose of the link would be ambiguous to users in general.
-    pass
+    links = soup.find_all('a')
+    issues = []
+    for link in links:
+        link_text = link.get_text(strip=True)
+        if link_text == "":
+            issues.append({
+                "type": "Empty link",
+                "severity": "Medium",
+                "element": str(link),
+                "description": "There's a link that exists but has no text content.",
+                "user_impact": "Users who rely on screen readers might not know the purpose of the link."
+            })
+    return issues
 
 def check_language(soup):
     # Check for missing language attribute (WCAG 3.1.1)
@@ -106,7 +138,6 @@ def get_user_input():
 # Testing
 html = get_webpage("https://beautiful-soup-4.readthedocs.io/en/latest/")
 soup = parse_html(html)
-print(soup.prettify())
 
 url = get_user_input()
 print ("Website entered: " + url)
