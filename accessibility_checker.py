@@ -110,7 +110,10 @@ def check_links(soup):
     issues = []
     for link in links:
         link_text = link.get_text(strip=True)
-        if link_text == "":
+        aria_label = link.get('aria-label')
+        image = link.find('img')
+        image_alt = image.get('alt') if image else None
+        if link_text == "" and (aria_label is None or aria_label.strip() == "") and (image_alt is None or image_alt.strip() == ""):
             issues.append({
                 "type": "Empty link",
                 "severity": "Medium",
