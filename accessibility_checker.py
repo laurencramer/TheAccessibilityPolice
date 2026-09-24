@@ -24,17 +24,19 @@ def parse_html(html):
 
 def check_page_title(soup):
     # Check for a non-empty <title> (WCAG 2.4.2)
-    
+    issues = []
     title = soup.find('title')
 
     if title is None or not title.text.strip():
-        return {
+        issues.append({
             "type": "Missing page title",
             "severity": "High",
             "element": str(title) if title else "None",
             "description": "The website doesn't have a title or the title is empty.",
             "user_impact": "Users may have difficulty identifying the page in search results or browser tabs."
-        }
+        })
+
+    return issues
 
 def check_images(soup):
     # Find images missing alt text (WCAG 1.1.1)
@@ -64,9 +66,11 @@ def check_forms(soup):
 
     for form in forms:
         inputs = form.find_all("input")
-
         for input_field in inputs:
             input_id = input_field.get("id")
+            input_type = input_field.get("type")
+            if input_type == "hidden":
+                continue
             if not input_id or not form.find("label", {"for": input_id}):
                 issues.append({
                     "type": "Form input without label",
@@ -119,15 +123,43 @@ def check_links(soup):
 def check_language(soup):
     # Check for missing language attribute (WCAG 3.1.1)
     # Success Criterion 3.1.1: The default human language of each web page can be programmatically determined.
-    pass
+    language = soup.find('html').get('lang')
+    issues = []
+    if language is None or language.strip() == "":
+        issues.append({
+            "type": "Missing language attribute",
+            "severity": "Medium",
+            "element": str(soup.find('html')),
+            "description": "The html tag is missing a 'lang' attribute or it's empty.",
+            "user_impact": "Users who rely on screen readers might not have the correct pronunciation or interpretation of the content."
+        })
+    return issues
 
 def analyze_page(soup):
     # Run all accessibility checks and return a list of issues found
-    pass
+    issues = []
+    issues.extend(check_page_title(soup))
+    issues.extend(check_images(soup))
+    issues.extend(check_forms(soup))
+    issues.extend(check_headings(soup))
+    issues.extend(check_links(soup))
+    issues.extend(check_language(soup))
+    
+    return issues
 
 def display_results(results):
     # Display all findings through the CLI
-    pass
+    print("Accessibility Analysis Results:")
+    print("Total Issues Found: " + str(len(results)))
+    print("-----")
+
+    for issue in results:
+        print("Issue Type: " + str(issue['type']))
+        print("Severity: " + str(issue['severity']))
+        print("Element: " + str(issue['element']))
+        print("Description: " + str(issue['description']))
+        print("User Impact: " + str(issue['user_impact']))
+        print("-----")
 
 def get_user_input():
     # Get the website URL from the user
@@ -136,8 +168,14 @@ def get_user_input():
 
 
 # Testing
-html = get_webpage("https://beautiful-soup-4.readthedocs.io/en/latest/")
-soup = parse_html(html)
-
+# html = get_webpage("https://beautiful-soup-4.readthedocs.io/en/latest/")
+# html2 = get_webpage("https://www.google.com/")
+# soup = parse_html(html)
+# soup2 = parse_html(html2)
 url = get_user_input()
 print ("Website entered: " + url)
+html = get_webpage(url)
+soup = parse_html(html)
+
+analysis_results = analyze_page(soup)
+display_results(analysis_results)
