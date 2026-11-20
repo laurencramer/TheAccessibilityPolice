@@ -4,25 +4,14 @@
 # This program analyzes a website's HTML to identify common accessibility issues
 # based on selected WCAG guidelines. It checks for issues like missing page titles, 
 # missing language information, missing image alt text, forms without labels, unclear
-# links, and problematic heading structures. The program explains each issue and its
-# potential impact on users.
+# links, and problematic heading structures. The program explains each issue, its
+# potential impact on users, and provides a recommended fix.
 
 import requests
 from bs4 import BeautifulSoup
 from fast_a11y import fast_a11y
 
-# put the URLs of your test bad sites here:
-# https://www.fake-university.com/
-# https://www.w3.org/WAI/demos/bad/before/home.html
-# https://de.torontomu.ca/wa/lulu/
-# https://projects.accesscomputing.uw.edu/au/before.html
-# https://openassessittoolkit.github.io/accessible_u/before_u.html
-# https://pandasaurusgames.com/
 
-
-
-
-# CH
 # Some sites reject the default python-requests User-Agent
 REQUEST_HEADERS = {
     "User-Agent": (
@@ -32,7 +21,7 @@ REQUEST_HEADERS = {
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
     "Accept-Language": "en-US,en;q=0.9",
 }
-# CH
+
 
 def get_webpage(url):
     # Retrieve website
@@ -40,7 +29,7 @@ def get_webpage(url):
     if not url.startswith("http://") and not url.startswith("https://"):
         url = "https://" + url
     try:
-        response = requests.get(url, timeout=10, headers=REQUEST_HEADERS)
+        response = requests.get(url, timeout=10)
         response.raise_for_status()
         return response.text
     # Handles a few exceptions that I ran into while testing the program. I will add more as I encounter them.
@@ -52,21 +41,24 @@ def get_webpage(url):
         print("HTTP error: The website refused the request.")
         print(error)
         return None
-# CH
     except requests.exceptions.RequestException as error:
-        print("Request error: Unable to retrieve this website.")
-        print(error)
-        return None
-# CH
-
+            print("Request error: Unable to retrieve this website.")
+            print(error)
+            return None
+    
 def parse_html(html):
     # Parse HTML with BeautifulSoup
     
     soup = BeautifulSoup(html, 'html.parser')
     return soup
 
+def get_line(tag):
+    # Line number in the downloaded HTML where the tag starts (None if unknown)
+    return getattr(tag, "sourceline", None)
+
 def check_page_title(soup):
     # Check for a non-empty <title> (WCAG 2.4.2)
+    # Success Criterion 2.4.2: Web pages have titles that describe topic or purpose.
     
     issues = []
     title = soup.find('title')
@@ -76,9 +68,11 @@ def check_page_title(soup):
             "type": "Missing page title",
             "severity": "High",
             "element": str(title) if title else "No specific HTML element found",
+            "line": get_line(title),
             "description": "The website doesn't have a title or the title is empty.",
             "user_impact": "Users may have difficulty identifying the page in search results or browser tabs.",
-            "wcag": "2.4.2"
+            "wcag": "2.4.2",
+            "recommended_fix": "Add a <title> element to the <head> that describes what the website is about."
         })
 
     return issues
@@ -96,9 +90,11 @@ def check_images(soup):
                 "type": "Missing alt text",
                 "severity": "High",
                 "element": str(img),
+                "line": get_line(img),
                 "description": "An image is missing an alt text attribute.",
                 "user_impact": "Users who rely on screen readers won't know what the image represents.",
-                "wcag": "1.1.1"
+                "wcag": "1.1.1",
+                "recommended_fix": "Add a short description of the image. If the image is purely decorative, use alt=\"\"."
             })
 
     return issues
@@ -126,9 +122,11 @@ def check_forms(soup):
                     "type": "Form input without label",
                     "severity": "High",
                     "element": str(input_field),
+                    "line": get_line(input_field),
                     "description": "A form input is missing an associated label.",
                     "user_impact": "Users who rely on screen readers might not know what information the form is asking them to enter.",
-                    "wcag": "1.3.1, 3.3.2"
+                    "wcag": "1.3.1, 3.3.2",
+                    "recommended_fix": "Give this field a label so users know what information they need to enter. You can do this with a <label> element, or by providing an accessible name using aria-label or aria-labelledby."
                 })
 
     return issues
@@ -148,9 +146,11 @@ def check_headings(soup):
                 "type": "Incorrect heading structure",
                 "severity": "Medium",
                 "element": str(heading),
+                "line": get_line(heading),
                 "description": "Heading level " + str(current_level) + " follows heading level " + str(previous_level) + ", which may confuse users.",
                 "user_impact": "Users who rely on screen readers might have difficulty understanding the content hierarchy.",
-                "wcag": "1.3.1"
+                "wcag": "1.3.1",
+                "recommended_fix": "Check the order of your headings. Try to keep them organized so users can easily follow the website's content. For example, an <h2> should not directly follow an <h4>."
             })
         previous_level = current_level
 
@@ -176,9 +176,11 @@ def check_links(soup):
                 "type": "Empty link",
                 "severity": "Medium",
                 "element": str(link),
+                "line": get_line(link),
                 "description": "There's a link that exists but has no text content.",
                 "user_impact": "Users who rely on screen readers might not know the purpose of the link.",
-                "wcag": "2.4.4"
+                "wcag": "2.4.4",
+                "recommended_fix": "Add text that explains where this link will take users. If the link contains an image, make sure the image has helpful alt text."
             })
     return issues
 
@@ -186,16 +188,20 @@ def check_language(soup):
     # Check for missing language attribute (WCAG 3.1.1)
     # Success Criterion 3.1.1: The default human language of each web page can be programmatically determined.
     
-    language = soup.find('html').get('lang')
+    html_tag = soup.find('html')
+    language = html_tag.get('lang')
     issues = []
     if language is None or language.strip() == "":
         issues.append({
             "type": "Missing language attribute",
             "severity": "Medium",
             "element": "<html>",
+            "line": get_line(html_tag),
             "description": "The <html> tag is missing a 'lang' attribute or it's empty.",
             "user_impact": "Users who rely on screen readers might not have the correct pronunciation or interpretation of the content.",
-            "wcag": "3.1.1"
+            "wcag": "3.1.1",
+            "recommended_fix": "Tell the browser what language the page is written in by adding a 'lang' attribute to the <html> element."
+
         })
     return issues
 
@@ -224,9 +230,11 @@ def check_empty_headings(soup):
             "type": "Empty heading",
             "severity": "Low",
             "element": str(heading),
+            "line": get_line(heading),
             "description": "A heading tag is present but has no text content.",
             "user_impact": "Users who rely on screen readers might have difficulty understanding the content hierarchy.",
-            "wcag": "1.3.1"
+            "wcag": "1.3.1",
+            "recommended_fix": "Add some text to this heading so users know what the section is about. If you don't need the heading, consider removing it or using CSS to style the text instead."
         })
     return issues
 
@@ -246,11 +254,56 @@ def check_empty_buttons(soup):
             "type": "Empty button",
             "severity": "Medium",
             "element": str(button),
+            "line": get_line(button),
             "description": "A button is present but has no text content.",
             "user_impact": "Users who rely on screen readers might not know the purpose of the button.",
-            "wcag": "4.1.2"
+            "wcag": "4.1.2",
+            "recommended_fix": "Add text to the button so users know what it does. You can also give it an accessible name if the button uses an icon instead."
         })
+    return issues
 
+def check_table_headers(soup):
+    # Check for tables missing headers (WCAG 1.3.1)
+    # Success Criterion 1.3.1: Information, structure, and relationships conveyed through presentation can be programmatically determined or are available in text.
+    tables = soup.find_all('table')    
+    issues = []
+
+    for table in tables:
+
+        # These skips tables that don't have text (probably used for layout purposes)
+        table_text = table.get_text(strip=True)
+        if not table_text:
+            continue
+        if table.find('img') and not table.find('th'):
+            continue
+
+        # Skips tables that have form elements
+        if table.find(['input', 'button', 'select', 'textarea']):
+            continue
+
+        # Skips tables that only have one cell
+        rows = table.find_all('tr')
+        single_cell = True
+        for row in rows:
+            cells = row.find_all(['td', 'th'])
+            if len(cells) > 1:
+                single_cell = False
+        if single_cell:
+            continue
+
+        headers = table.find_all('th')
+
+        if not headers:
+            issues.append({
+                "type": "Missing table headers",
+                "severity": "Medium",
+                "element": str(table),
+                "line": get_line(table),
+                "description": "This table doesn't appear to have any header cells.",
+                "user_impact": "Users who rely on screen readers might have difficulty understanding what the information in each row or column represents.",
+                "wcag": "1.3.1",
+                "recommended_fix": "Add header cells using the <th> element to the table to provide headers for each column or row."
+            })
     return issues
 
 
@@ -266,6 +319,7 @@ def analyze_page(soup):
     issues.extend(check_language(soup))
     issues.extend(check_empty_headings(soup))
     issues.extend(check_empty_buttons(soup))
+    issues.extend(check_table_headers(soup))
     return issues
 
 def summarize_results(results):
@@ -289,6 +343,7 @@ def summarize_results(results):
     missing_language_attribute = 0
     empty_headings = 0
     empty_buttons = 0
+    missing_table_headers = 0
 
     for issue in results:
         if issue['type'] == "Missing page title":
@@ -356,6 +411,8 @@ def display_results(results):
         for issue in results:
             print("[" + str(issue['severity']).upper() + "] " + str(issue['type']))
             print("WCAG: " + str(issue['wcag']))
+            if issue.get('line'):
+                print("Line: " + str(issue['line']))
             print("Element: " + str(issue['element']))
             print("Description: " + str(issue['description']))
             print("User Impact: " + str(issue['user_impact']))
